@@ -31,9 +31,9 @@ const INITIAL_VIEW_STATE = {
 };
 
 const SPEED_OPTIONS = [
-  { label: "1x", value: 1 },
-  { label: "2x", value: 2 },
-  { label: "4x", value: 4 }
+  { label: "20x", value: 20 },
+  { label: "40x", value: 40 },
+  { label: "80x", value: 80 }
 ] as const;
 
 const SCENE_PRESETS = [
@@ -50,6 +50,43 @@ function matchesFilter(trip: Trip, rideFilter: RideFilter) {
     trip.bikeType === rideFilter ||
     trip.memberCasual === rideFilter
   );
+}
+
+function getTripPosition(
+  trip: Trip,
+  currentTime: number
+): [number, number] | null {
+  if (currentTime < trip.startTime || currentTime > trip.endTime) {
+    return null;
+  }
+
+  const { timestamps, path } = trip;
+
+  if (timestamps.length < 2 || path.length < 2) {
+    return path[0] ?? null;
+  }
+
+  for (let index = 1; index < timestamps.length; index += 1) {
+    const previousTime = timestamps[index - 1];
+    const nextTime = timestamps[index];
+
+    if (currentTime <= nextTime) {
+      const [startLng, startLat] = path[index - 1]!;
+      const [endLng, endLat] = path[index]!;
+      const span = nextTime - previousTime || 1;
+      const progress = Math.min(
+        1,
+        Math.max(0, (currentTime - previousTime) / span)
+      );
+
+      return [
+        startLng + (endLng - startLng) * progress,
+        startLat + (endLat - startLat) * progress
+      ];
+    }
+  }
+
+  return path[path.length - 1] ?? null;
 }
 
 function App() {
@@ -136,8 +173,10 @@ function App() {
       lastFrameRef.current = timestamp;
 
       setCurrentTime((previousTime) => {
-        const nextTime = previousTime + deltaSeconds * speed * 60;
-        return nextTime >= totalSimulationSeconds ? totalSimulationSeconds : nextTime;
+        const nextTime = previousTime + deltaSeconds * speed;
+        return nextTime >= totalSimulationSeconds
+          ? nextTime % totalSimulationSeconds
+          : nextTime;
       });
 
       frameId = window.requestAnimationFrame(tick);
@@ -149,12 +188,6 @@ function App() {
       window.cancelAnimationFrame(frameId);
     };
   }, [isPlaying, isLoading, loadError, speed]);
-
-  useEffect(() => {
-    if (currentTime >= totalSimulationSeconds) {
-      setIsPlaying(false);
-    }
-  }, [currentTime]);
 
   useEffect(() => {
     if (
@@ -189,6 +222,24 @@ function App() {
       fadeTrail: true,
       capRounded: true,
       jointRounded: true,
+      pickable: true,
+      onHover: ({ object }: PickingInfo<Trip>) => {
+        setHoveredTrip(object ?? null);
+      }
+    }),
+    new ScatterplotLayer<Trip>({
+      id: "bike-heads",
+      data: activeTrips,
+      getPosition: (trip) => getTripPosition(trip, currentTime) ?? trip.path[0]!,
+      radiusUnits: "meters",
+      getRadius: (trip) => (trip.bikeType === "electric_bike" ? 65 : 52),
+      getFillColor: (trip) => {
+        const [red, green, blue] = hexToRgb(trip.accent);
+        return [red, green, blue, 235];
+      },
+      getLineColor: [255, 255, 255, 210],
+      lineWidthMinPixels: 1.5,
+      stroked: true,
       pickable: true,
       onHover: ({ object }: PickingInfo<Trip>) => {
         setHoveredTrip(object ?? null);
@@ -412,7 +463,7 @@ function App() {
             className="control-button primary"
             disabled={isLoading || Boolean(loadError)}
             onClick={() => {
-              if (currentTime >= totalSimulationSeconds) {
+              if (currentTime >= totalSimulationSeconds - 1) {
                 setCurrentTime(0);
               }
               setIsPlaying((value) => !value);
