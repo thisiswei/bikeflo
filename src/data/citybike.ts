@@ -20,6 +20,8 @@ export type Trip = {
   id: string;
   startStationName: string;
   endStationName: string;
+  startCoordinates: [number, number];
+  endCoordinates: [number, number];
   startedAt: Date;
   endedAt: Date;
   bikeType: "classic_bike" | "electric_bike";
@@ -56,12 +58,12 @@ const FILE_NAME = `${PARQUET_DAY}.parquet`;
 const WINDOW_START = new Date("2025-07-18T07:00:00-04:00");
 const WINDOW_END = new Date("2025-07-18T08:35:00-04:00");
 const BOUNDS = {
-  minLat: 40.68,
-  maxLat: 40.82,
-  minLng: -74.04,
-  maxLng: -73.9
+  minLat: 40.71,
+  maxLat: 40.77,
+  minLng: -74.01,
+  maxLng: -73.95
 };
-const MAX_TRIPS = 220;
+const MAX_TRIPS = 120;
 
 export const simulationStart = WINDOW_START;
 export const totalSimulationSeconds =
@@ -268,6 +270,8 @@ export async function loadCitybikeSlice(): Promise<{
         id: row.id,
         startStationName: row.startStationName,
         endStationName: row.endStationName,
+        startCoordinates: [row.startLng, row.startLat],
+        endCoordinates: [row.endLng, row.endLat],
         startedAt,
         endedAt,
         bikeType: row.bikeType,

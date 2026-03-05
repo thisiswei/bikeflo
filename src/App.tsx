@@ -10,7 +10,6 @@ import {
   rideFilterMeta,
   totalSimulationSeconds,
   type RideFilter,
-  type Station,
   type Trip
 } from "./data/citybike";
 import {
@@ -23,11 +22,11 @@ import {
 } from "./lib/format";
 
 const INITIAL_VIEW_STATE = {
-  longitude: -73.983,
-  latitude: 40.739,
-  zoom: 11.2,
-  pitch: 48,
-  bearing: -9
+  longitude: -73.985,
+  latitude: 40.741,
+  zoom: 12.35,
+  pitch: 18,
+  bearing: -8
 };
 
 const SPEED_OPTIONS = [
@@ -96,7 +95,6 @@ function App() {
   const [rideFilter, setRideFilter] = useState<RideFilter>("all");
   const [hoveredTrip, setHoveredTrip] = useState<Trip | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [stations, setStations] = useState<Station[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const lastFrameRef = useRef<number | null>(null);
@@ -115,7 +113,6 @@ function App() {
         }
 
         setTrips(result.trips);
-        setStations(result.stations);
       } catch (error) {
         if (ignore) {
           return;
@@ -155,6 +152,20 @@ function App() {
     hoveredTrip && visibleTrips.some((trip) => trip.id === hoveredTrip.id)
       ? hoveredTrip
       : activeTrips[0] ?? visibleTrips[0] ?? null;
+  const renderedTrips =
+    activeTrips.length > 32 ? activeTrips.slice(activeTrips.length - 32) : activeTrips;
+  const focusStations = highlightedTrip
+    ? [
+        {
+          name: highlightedTrip.startStationName,
+          coordinates: highlightedTrip.startCoordinates
+        },
+        {
+          name: highlightedTrip.endStationName,
+          coordinates: highlightedTrip.endCoordinates
+        }
+      ]
+    : [];
 
   useEffect(() => {
     if (!isPlaying || isLoading || loadError) {
@@ -200,24 +211,24 @@ function App() {
 
   const layers = [
     new PathLayer<Trip>({
-      id: "route-skeletons",
-      data: visibleTrips,
+      id: "focus-route",
+      data: highlightedTrip ? [highlightedTrip] : [],
       getPath: (trip) => trip.path,
-      getColor: [49, 70, 102, 120],
-      getWidth: 3,
+      getColor: [28, 43, 68, 150],
+      getWidth: 5,
       widthMinPixels: 1,
       rounded: true
     }),
     new TripsLayer<Trip>({
       id: "animated-trips",
-      data: visibleTrips,
+      data: renderedTrips,
       getPath: (trip) => trip.path,
       getTimestamps: (trip) => trip.timestamps,
       getColor: (trip) => hexToRgb(trip.accent),
-      getWidth: (trip) => (trip.bikeType === "electric_bike" ? 5 : 3.2),
+      getWidth: (trip) => (trip.bikeType === "electric_bike" ? 4.2 : 2.8),
       widthMinPixels: 2,
       rounded: true,
-      trailLength: 12 * 60,
+      trailLength: 4 * 60,
       currentTime,
       fadeTrail: true,
       capRounded: true,
@@ -229,10 +240,10 @@ function App() {
     }),
     new ScatterplotLayer<Trip>({
       id: "bike-heads",
-      data: activeTrips,
+      data: renderedTrips,
       getPosition: (trip) => getTripPosition(trip, currentTime) ?? trip.path[0]!,
       radiusUnits: "meters",
-      getRadius: (trip) => (trip.bikeType === "electric_bike" ? 65 : 52),
+      getRadius: (trip) => (trip.bikeType === "electric_bike" ? 52 : 42),
       getFillColor: (trip) => {
         const [red, green, blue] = hexToRgb(trip.accent);
         return [red, green, blue, 235];
@@ -245,40 +256,20 @@ function App() {
         setHoveredTrip(object ?? null);
       }
     }),
-    new ScatterplotLayer<Station>({
-      id: "stations",
-      data: stations,
+    new ScatterplotLayer({
+      id: "focus-stations",
+      data: focusStations,
       getPosition: (station) => station.coordinates,
       radiusUnits: "meters",
-      getRadius: (station) => {
-        if (
-          highlightedTrip &&
-          (highlightedTrip.startStationName === station.name ||
-            highlightedTrip.endStationName === station.name)
-        ) {
-          return 170;
-        }
-
-        return station.featured ? 120 : 80;
-      },
-      getFillColor: (station) => {
-        if (
-          highlightedTrip &&
-          (highlightedTrip.startStationName === station.name ||
-            highlightedTrip.endStationName === station.name)
-        ) {
-          return [255, 209, 102, 230];
-        }
-
-        return station.featured ? [28, 43, 68, 180] : [78, 95, 120, 130];
-      },
-      getLineColor: [255, 255, 255, 140],
-      lineWidthMinPixels: 1,
+      getRadius: 95,
+      getFillColor: [255, 209, 102, 220],
+      getLineColor: [28, 43, 68, 220],
+      lineWidthMinPixels: 2,
       stroked: true
     }),
-    new TextLayer<Station>({
-      id: "station-labels",
-      data: stations.filter((station) => station.featured),
+    new TextLayer({
+      id: "focus-station-labels",
+      data: focusStations,
       getPosition: (station) => station.coordinates,
       getText: (station) => station.name,
       getColor: [20, 28, 38, 220],
@@ -362,6 +353,10 @@ function App() {
           <article className="stat-card">
             <span>Stations live</span>
             <strong>{activeStations}</strong>
+          </article>
+          <article className="stat-card">
+            <span>Scene rides</span>
+            <strong>{renderedTrips.length}</strong>
           </article>
           <article className="stat-card">
             <span>Avg distance</span>
