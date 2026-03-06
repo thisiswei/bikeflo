@@ -1,4 +1,5 @@
 import stationsMeta from "./stations.json";
+import { decodePolyline } from "../lib/polyline";
 
 export type Station = {
   id: string;
@@ -68,6 +69,7 @@ type OfficialTripRow = {
   startBorough?: BoroughKey;
   endBorough?: BoroughKey;
   path?: Coordinate[];
+  routeGeometry?: string;
 };
 
 type OfficialSlicePayload = {
@@ -287,12 +289,14 @@ export async function loadCitybikeSlice(): Promise<{
         Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)
       );
       const path =
-        row.path && row.path.length > 1
-          ? row.path
-          : ([
-              [row.startLng, row.startLat],
-              [row.endLng, row.endLat]
-            ] satisfies Coordinate[]);
+        row.routeGeometry
+          ? (decodePolyline(row.routeGeometry, 6) as Coordinate[])
+          : row.path && row.path.length > 1
+            ? row.path
+            : ([
+                [row.startLng, row.startLat],
+                [row.endLng, row.endLat]
+              ] satisfies Coordinate[]);
 
       return {
         id: row.id,

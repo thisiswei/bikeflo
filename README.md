@@ -44,5 +44,34 @@ GitHub Pages is configured to deploy from `master` via Actions.
 
 - The current slice uses real Citi Bike rides from the official February 2026 trip history for `2026-02-27 06:00-10:30` America/New_York.
 - The browser loads a preprocessed local slice from `public/data/official-2026-02-27-morning-routed.json`, so the deployed app does not fetch raw AWS trip ZIPs at runtime.
-- `npm run data:route` rebuilds the routed slice from the checked-in official trip slice.
-- Route paths are still inferred from station endpoints, but they are now generated offline and cached into the shipped data asset instead of being recomputed in the browser.
+- `npm run data:route` rebuilds the routed slice from the checked-in official trip slice by calling a local OSRM server.
+- Route paths are precomputed offline with OSRM bicycle routing and cached into the shipped data asset.
+
+## Rebuild Routes
+
+Prepare a local OSRM server once:
+
+```bash
+mkdir -p .osrm
+cp scripts/osrm/bicycle-no-ferry.lua .osrm/
+cd .osrm
+wget https://download.bbbike.org/osm/bbbike/NewYork/NewYork.osm.pbf
+
+docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+  osrm-extract -p /data/bicycle-no-ferry.lua /data/NewYork.osm.pbf
+
+docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+  osrm-partition /data/NewYork.osrm
+
+docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+  osrm-customize /data/NewYork.osrm
+
+docker run --rm -p 5000:5000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+  osrm-routed --algorithm mld /data/NewYork.osrm
+```
+
+Then, in another shell:
+
+```bash
+npm run data:route
+```
