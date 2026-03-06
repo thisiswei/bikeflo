@@ -31,6 +31,13 @@ npm run dev
 
 The app runs without a backend or API key.
 
+## Deploy
+
+GitHub Pages is configured to deploy from `main` via Actions.
+
+- Target URL: `https://thisiswei.github.io/bikeflo`
+- Workflow: [deploy-pages.yml](/Users/w/Development/code/bikeflo/.github/workflows/deploy-pages.yml)
+
 ## Notes
 
 - The current slice uses real Citi Bike rides from `2025-07-18 06:00-10:30` America/New_York, loaded from the public `https://cdn.bikemap.nyc/parquets/2025-07-18.parquet`.
