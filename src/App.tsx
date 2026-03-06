@@ -303,9 +303,8 @@ function App() {
         <div className="eyebrow">Real Citi Bike playback</div>
         <h1>CityBike Flow</h1>
         <p className="lede">
-          The prototype now pulls actual Citi Bike rides from the public{" "}
-          <span>`cdn.bikemap.nyc`</span> parquet slice, then animates those
-          routes locally with DuckDB WASM and deck.gl.
+          Real Citi Bike rides from a public <span>`bikemap.nyc`</span> parquet
+          slice, animated locally with DuckDB WASM and deck.gl.
         </p>
 
         <div className="meta-row">
@@ -337,13 +336,13 @@ function App() {
 
         <p className="description">{rideFilterMeta[rideFilter].description}</p>
 
-        <p className="status-note">
-          {isLoading
-            ? "Loading the morning slice from the bikemap.nyc parquet CDN..."
-            : loadError
-              ? loadError
-              : "Trips, stations, timestamps, bike type, and route geometry are real. This prototype reuses that public processed slice locally."}
-        </p>
+        {(isLoading || loadError) && (
+          <p className="status-note">
+            {isLoading
+              ? "Loading the morning slice from the bikemap.nyc parquet CDN..."
+              : loadError}
+          </p>
+        )}
 
         <div className="stats-grid">
           <article className="stat-card">
@@ -358,11 +357,13 @@ function App() {
             <span>Scene rides</span>
             <strong>{renderedTrips.length}</strong>
           </article>
-          <article className="stat-card">
-            <span>Avg distance</span>
-            <strong>{activeTrips.length ? formatMiles(averageDistance) : "0.0 mi"}</strong>
-          </article>
         </div>
+
+        <p className="status-inline">
+          {activeTrips.length
+            ? `Avg live trip ${formatMiles(averageDistance)}`
+            : "Waiting for the next ride pulse"}
+        </p>
 
         <div className="preset-row">
           {SCENE_PRESETS.map((preset) => (
@@ -414,9 +415,7 @@ function App() {
             </dl>
 
             <div className="detail-footer">
-              Route geometry comes from the processed `bikemap.nyc` public
-              parquet slice, so the ride rows are real Citi Bike history even
-              though this UI is a separate prototype.
+              Public bikemap.nyc parquet slice.
             </div>
           </>
         ) : (

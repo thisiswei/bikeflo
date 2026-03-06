@@ -64,11 +64,11 @@ body {
 }
 
 .hero-panel {
-  top: 22px;
-  left: 22px;
-  width: min(430px, calc(100vw - 44px));
-  padding: 22px 24px 20px;
-  border-radius: 28px;
+  top: 18px;
+  left: 18px;
+  width: min(340px, calc(100vw - 36px));
+  padding: 18px 18px 16px;
+  border-radius: 24px;
 }
 
 .eyebrow {
@@ -87,14 +87,14 @@ h2 {
 }
 
 h1 {
-  margin-top: 10px;
-  font-size: clamp(2.8rem, 5vw, 4.6rem);
+  margin-top: 8px;
+  font-size: clamp(2.35rem, 4vw, 3.85rem);
   font-weight: 600;
 }
 
 h2 {
-  margin-top: 10px;
-  font-size: 2rem;
+  margin-top: 8px;
+  font-size: 1.6rem;
   font-weight: 600;
 }
 
@@ -109,9 +109,9 @@ h2 {
 }
 
 .lede {
-  margin: 14px 0 18px;
-  max-width: 36rem;
-  font-size: 1rem;
+  margin: 12px 0 14px;
+  max-width: 28rem;
+  font-size: 0.92rem;
 }
 
 .lede span {
@@ -128,8 +128,8 @@ h2 {
 .time-readout strong,
 .stat-card strong {
   display: block;
-  margin-top: 4px;
-  font-size: 1.1rem;
+  margin-top: 3px;
+  font-size: 1rem;
 }
 
 .meta-label,
@@ -147,11 +147,11 @@ h2 {
 .speed-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .chip-row {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .chip,
@@ -178,9 +178,10 @@ h2 {
 .chip,
 .preset,
 .speed-chip {
-  padding: 0.68rem 0.95rem;
+  padding: 0.5rem 0.78rem;
   border-radius: 999px;
   font: inherit;
+  font-size: 0.84rem;
   cursor: pointer;
 }
 
@@ -192,33 +193,41 @@ h2 {
 }
 
 .description {
-  margin-top: 14px;
+  margin-top: 10px;
+  font-size: 0.88rem;
 }
 
 .status-note {
-  margin-top: 14px;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
+  margin-top: 12px;
+  padding: 0.7rem 0.82rem;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
+  font-size: 0.84rem;
+}
+
+.status-inline {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 20px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .stat-card {
-  padding: 14px;
-  border-radius: 20px;
+  padding: 11px 12px;
+  border-radius: 16px;
   background: var(--panel-strong);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .preset-row {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .preset {
@@ -226,11 +235,11 @@ h2 {
 }
 
 .detail-panel {
-  top: 24px;
-  right: 24px;
-  width: min(330px, calc(100vw - 48px));
-  padding: 20px 22px;
-  border-radius: 24px;
+  top: 18px;
+  right: 18px;
+  width: min(280px, calc(100vw - 36px));
+  padding: 16px 16px 14px;
+  border-radius: 20px;
 }
 
 .detail-header {
@@ -241,9 +250,9 @@ h2 {
 }
 
 .detail-pill {
-  padding: 0.4rem 0.7rem;
+  padding: 0.32rem 0.58rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   background: rgba(255, 209, 102, 0.14);
@@ -252,19 +261,20 @@ h2 {
 
 .detail-list {
   display: grid;
-  gap: 14px;
-  margin: 20px 0 0;
+  gap: 10px;
+  margin: 16px 0 0;
 }
 
 .detail-list dd {
-  margin: 6px 0 0;
-  font-size: 1rem;
+  margin: 4px 0 0;
+  font-size: 0.95rem;
 }
 
 .detail-footer {
-  margin-top: 18px;
-  padding-top: 16px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.84rem;
 }
 
 .detail-empty {
@@ -275,17 +285,17 @@ h2 {
 
 .controls-panel {
   right: 50%;
-  bottom: 24px;
-  width: min(780px, calc(100vw - 28px));
-  padding: 18px 20px;
-  border-radius: 28px;
+  bottom: 18px;
+  width: min(560px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border-radius: 22px;
   transform: translateX(50%);
 }
 
 .time-cluster {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
 }
 
@@ -297,20 +307,21 @@ h2 {
 .control-row {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 12px;
   align-items: center;
 }
 
 .control-button {
-  padding: 0.8rem 1.05rem;
-  border-radius: 16px;
+  padding: 0.66rem 0.92rem;
+  border-radius: 14px;
   font: inherit;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
 .primary {
-  min-width: 96px;
+  min-width: 82px;
 }
 
 button:disabled,
