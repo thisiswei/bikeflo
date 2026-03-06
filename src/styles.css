@@ -154,6 +154,18 @@ h2 {
   margin-top: 14px;
 }
 
+.chip-row.secondary {
+  margin-top: 8px;
+}
+
+.filter-label {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .chip,
 .preset,
 .speed-chip,

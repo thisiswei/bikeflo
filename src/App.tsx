@@ -6,9 +6,11 @@ import type { PickingInfo } from "@deck.gl/core";
 import Map from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import {
+  boroughMeta,
   loadCitybikeSlice,
   rideFilterMeta,
   totalSimulationSeconds,
+  type BoroughFilter,
   type RideFilter,
   type Trip
 } from "./data/citybike";
@@ -22,11 +24,43 @@ import {
 } from "./lib/format";
 
 const INITIAL_VIEW_STATE = {
-  longitude: -73.985,
-  latitude: 40.741,
-  zoom: 12.35,
-  pitch: 18,
-  bearing: -8
+  longitude: -73.968,
+  latitude: 40.726,
+  zoom: 11.15,
+  pitch: 14,
+  bearing: -6
+};
+
+const BOROUGH_VIEW_STATE: Record<BoroughFilter, typeof INITIAL_VIEW_STATE> = {
+  all: INITIAL_VIEW_STATE,
+  manhattan: {
+    longitude: -73.985,
+    latitude: 40.741,
+    zoom: 12.15,
+    pitch: 16,
+    bearing: -8
+  },
+  brooklyn: {
+    longitude: -73.968,
+    latitude: 40.685,
+    zoom: 11.35,
+    pitch: 14,
+    bearing: -6
+  },
+  queens: {
+    longitude: -73.915,
+    latitude: 40.744,
+    zoom: 11.35,
+    pitch: 14,
+    bearing: -8
+  },
+  bronx: {
+    longitude: -73.918,
+    latitude: 40.81,
+    zoom: 11.3,
+    pitch: 14,
+    bearing: -4
+  }
 };
 
 const SPEED_OPTIONS = [
@@ -42,6 +76,7 @@ const SCENE_PRESETS = [
 ] as const;
 
 const FILTER_OPTIONS = Object.keys(rideFilterMeta) as RideFilter[];
+const BOROUGH_OPTIONS = Object.keys(boroughMeta) as BoroughFilter[];
 
 function matchesFilter(trip: Trip, rideFilter: RideFilter) {
   return (
@@ -49,6 +84,28 @@ function matchesFilter(trip: Trip, rideFilter: RideFilter) {
     trip.bikeType === rideFilter ||
     trip.memberCasual === rideFilter
   );
+}
+
+function matchesBoroughFilter(trip: Trip, boroughFilter: BoroughFilter) {
+  return (
+    boroughFilter === "all" ||
+    trip.startBorough === boroughFilter ||
+    trip.endBorough === boroughFilter
+  );
+}
+
+function formatTripBorough(
+  borough: Trip["startBorough"]
+): string {
+  if (borough === "other") {
+    return "Other";
+  }
+
+  if (borough === "unknown") {
+    return "Unknown";
+  }
+
+  return boroughMeta[borough].label;
 }
 
 function getTripPosition(
@@ -93,11 +150,13 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState<number>(SPEED_OPTIONS[1].value);
   const [rideFilter, setRideFilter] = useState<RideFilter>("all");
+  const [boroughFilter, setBoroughFilter] = useState<BoroughFilter>("all");
   const [hoveredTrip, setHoveredTrip] = useState<Trip | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const lastFrameRef = useRef<number | null>(null);
+  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
 
   useEffect(() => {
     let ignore = false;
@@ -138,7 +197,11 @@ function App() {
     };
   }, []);
 
-  const visibleTrips = trips.filter((trip) => matchesFilter(trip, rideFilter));
+  const visibleTrips = trips.filter(
+    (trip) =>
+      matchesFilter(trip, rideFilter) &&
+      matchesBoroughFilter(trip, boroughFilter)
+  );
   const activeTrips = visibleTrips.filter(
     (trip) => currentTime >= trip.startTime && currentTime <= trip.endTime
   );
@@ -166,6 +229,10 @@ function App() {
         }
       ]
     : [];
+
+  useEffect(() => {
+    setViewState(BOROUGH_VIEW_STATE[boroughFilter]);
+  }, [boroughFilter]);
 
   useEffect(() => {
     if (!isPlaying || isLoading || loadError) {
@@ -287,8 +354,11 @@ function App() {
       <div className="backdrop" />
       <DeckGL
         controller
-        initialViewState={INITIAL_VIEW_STATE}
         layers={layers}
+        onViewStateChange={(event) =>
+          setViewState(event.viewState as typeof INITIAL_VIEW_STATE)
+        }
+        viewState={viewState}
         style={{ position: "absolute", top: "0", right: "0", bottom: "0", left: "0" }}
       >
         <Map
@@ -317,7 +387,7 @@ function App() {
           </div>
           <div>
             <span className="meta-label">Loaded rides</span>
-            <strong>{trips.length}</strong>
+            <strong>{visibleTrips.length}</strong>
           </div>
         </div>
 
@@ -334,7 +404,23 @@ function App() {
           ))}
         </div>
 
-        <p className="description">{rideFilterMeta[rideFilter].description}</p>
+        <div className="filter-label">Borough</div>
+        <div className="chip-row secondary">
+          {BOROUGH_OPTIONS.map((option) => (
+            <button
+              key={option}
+              className={option === boroughFilter ? "chip active" : "chip"}
+              onClick={() => setBoroughFilter(option)}
+              type="button"
+            >
+              {boroughMeta[option].label}
+            </button>
+          ))}
+        </div>
+
+        <p className="description">
+          {rideFilterMeta[rideFilter].description} {boroughMeta[boroughFilter].description}
+        </p>
 
         {(isLoading || loadError) && (
           <p className="status-note">
@@ -403,6 +489,14 @@ function App() {
               <div>
                 <dt>Distance</dt>
                 <dd>{formatMiles(highlightedTrip.routeDistance)}</dd>
+              </div>
+              <div>
+                <dt>Boroughs</dt>
+                <dd>
+                  {formatTripBorough(highlightedTrip.startBorough)}
+                  {" -> "}
+                  {formatTripBorough(highlightedTrip.endBorough)}
+                </dd>
               </div>
               <div>
                 <dt>Departure</dt>
