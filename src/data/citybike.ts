@@ -73,15 +73,18 @@ type StationMeta = {
 const PARQUET_BASE_URL = "https://cdn.bikemap.nyc";
 const PARQUET_DAY = "2025-07-18";
 const FILE_NAME = `${PARQUET_DAY}.parquet`;
-const WINDOW_START = new Date("2025-07-18T07:00:00-04:00");
-const WINDOW_END = new Date("2025-07-18T08:35:00-04:00");
+const WINDOW_START = new Date("2025-07-18T06:00:00-04:00");
+const WINDOW_END = new Date("2025-07-18T10:30:00-04:00");
+const INITIAL_FOCUS_TIME = new Date("2025-07-18T07:30:00-04:00");
 const BOUNDS = {
   minLat: 40.65,
   maxLat: 40.84,
   minLng: -74.01,
   maxLng: -73.84
 };
-const MAX_TRIPS = 220;
+const MAX_TRIPS = 900;
+const SAMPLE_BUCKET_MINUTES = 15;
+const MAX_TRIPS_PER_BUCKET = 50;
 
 const boroughMeta: Record<
   BoroughFilter,
@@ -112,6 +115,8 @@ const boroughMeta: Record<
 export const simulationStart = WINDOW_START;
 export const totalSimulationSeconds =
   (WINDOW_END.getTime() - WINDOW_START.getTime()) / 1000;
+export const initialSimulationSeconds =
+  (INITIAL_FOCUS_TIME.getTime() - WINDOW_START.getTime()) / 1000;
 export { boroughMeta };
 
 export const rideFilterMeta: Record<
@@ -255,12 +260,52 @@ export async function loadCitybikeSlice(): Promise<{
   const { conn } = await getDatabase();
 
   const result = await conn.query(`
+    WITH candidates AS (
+      SELECT
+        id,
+        startStationName,
+        endStationName,
+        epoch_ms(startedAt) AS startedAtMs,
+        epoch_ms(endedAt) AS endedAtMs,
+        bikeType,
+        memberCasual,
+        startLat,
+        startLng,
+        endLat,
+        endLng,
+        routeGeometry,
+        routeDistance,
+        floor(
+          (epoch_ms(startedAt) - ${WINDOW_START.getTime()}) /
+          (${SAMPLE_BUCKET_MINUTES} * 60 * 1000)
+        ) AS timeBucket
+      FROM read_parquet(['${FILE_NAME}'])
+      WHERE startedAt >= epoch_ms(${WINDOW_START.getTime()})
+        AND startedAt < epoch_ms(${WINDOW_END.getTime()})
+        AND routeGeometry IS NOT NULL
+        AND routeDistance IS NOT NULL
+        AND epoch_ms(endedAt) - epoch_ms(startedAt) BETWEEN 2 * 60 * 1000 AND 90 * 60 * 1000
+        AND startLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
+        AND endLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
+        AND startLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
+        AND endLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
+        AND routeDistance BETWEEN 250 AND 12000
+    ),
+    sampled AS (
+      SELECT
+        *,
+        row_number() OVER (
+          PARTITION BY timeBucket
+          ORDER BY hash(id)
+        ) AS bucketRank
+      FROM candidates
+    )
     SELECT
       id,
       startStationName,
       endStationName,
-      epoch_ms(startedAt) AS startedAtMs,
-      epoch_ms(endedAt) AS endedAtMs,
+      startedAtMs,
+      endedAtMs,
       bikeType,
       memberCasual,
       startLat,
@@ -269,18 +314,9 @@ export async function loadCitybikeSlice(): Promise<{
       endLng,
       routeGeometry,
       routeDistance
-    FROM read_parquet(['${FILE_NAME}'])
-    WHERE startedAt >= epoch_ms(${WINDOW_START.getTime()})
-      AND startedAt < epoch_ms(${WINDOW_END.getTime()})
-      AND routeGeometry IS NOT NULL
-      AND routeDistance IS NOT NULL
-      AND epoch_ms(endedAt) - epoch_ms(startedAt) BETWEEN 2 * 60 * 1000 AND 90 * 60 * 1000
-      AND startLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
-      AND endLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
-      AND startLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
-      AND endLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
-      AND routeDistance BETWEEN 250 AND 12000
-    ORDER BY startedAt ASC
+    FROM sampled
+    WHERE bucketRank <= ${MAX_TRIPS_PER_BUCKET}
+    ORDER BY startedAtMs ASC
     LIMIT ${MAX_TRIPS}
   `);
 

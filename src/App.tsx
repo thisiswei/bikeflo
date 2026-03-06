@@ -7,6 +7,7 @@ import Map from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import {
   boroughMeta,
+  initialSimulationSeconds,
   loadCitybikeSlice,
   rideFilterMeta,
   totalSimulationSeconds,
@@ -140,7 +141,7 @@ function getTripPosition(
 }
 
 function App() {
-  const [currentTime, setCurrentTime] = useState(8 * 60);
+  const [currentTime, setCurrentTime] = useState(initialSimulationSeconds);
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState<number>(SPEED_OPTIONS[1].value);
   const [rideFilter, setRideFilter] = useState<RideFilter>("all");
