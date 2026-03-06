@@ -1,5 +1,9 @@
 import stationsMeta from "./stations.json";
 import { decodePolyline } from "../lib/polyline";
+import {
+  buildDistanceTimestamps,
+  densifyPath
+} from "../lib/route-geometry";
 
 export type Station = {
   id: string;
@@ -176,13 +180,6 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function buildTimestamps(startTime: number, endTime: number, count: number) {
-  return Array.from(
-    { length: count },
-    (_, index) => startTime + ((endTime - startTime) * index) / (count - 1)
-  );
-}
-
 function normalizeBorough(value?: string): BoroughKey {
   switch (value) {
     case "Manhattan":
@@ -290,9 +287,9 @@ export async function loadCitybikeSlice(): Promise<{
       );
       const path =
         row.routeGeometry
-          ? (decodePolyline(row.routeGeometry, 6) as Coordinate[])
+          ? densifyPath(decodePolyline(row.routeGeometry, 6) as Coordinate[])
           : row.path && row.path.length > 1
-            ? row.path
+            ? densifyPath(row.path)
             : ([
                 [row.startLng, row.startLat],
                 [row.endLng, row.endLat]
@@ -312,7 +309,7 @@ export async function loadCitybikeSlice(): Promise<{
         memberCasual: row.memberCasual,
         routeDistance: row.routeDistance,
         path,
-        timestamps: buildTimestamps(startTime, endTime, path.length),
+        timestamps: buildDistanceTimestamps(path, startTime, endTime),
         startTime,
         endTime,
         accent: pickAccent(row.bikeType, row.memberCasual),
