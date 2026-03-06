@@ -69,12 +69,6 @@ const SPEED_OPTIONS = [
   { label: "80x", value: 80 }
 ] as const;
 
-const SCENE_PRESETS = [
-  { label: "Early rush", seconds: 10 * 60 },
-  { label: "Bridge pulse", seconds: 38 * 60 },
-  { label: "Late push", seconds: 66 * 60 }
-] as const;
-
 const FILTER_OPTIONS = Object.keys(rideFilterMeta) as RideFilter[];
 const BOROUGH_OPTIONS = Object.keys(boroughMeta) as BoroughFilter[];
 
@@ -206,11 +200,6 @@ function App() {
     (trip) => currentTime >= trip.startTime && currentTime <= trip.endTime
   );
   const activeStations = uniqueStationCount(activeTrips);
-  const averageDistance =
-    activeTrips.length > 0
-      ? activeTrips.reduce((sum, trip) => sum + trip.routeDistance, 0) /
-        activeTrips.length
-      : 0;
   const highlightedTrip =
     hoveredTrip && visibleTrips.some((trip) => trip.id === hoveredTrip.id)
       ? hoveredTrip
@@ -369,227 +358,181 @@ function App() {
         />
       </DeckGL>
 
-      <section className="panel hero-panel">
-        <div className="eyebrow">Real Citi Bike playback</div>
-        <h1>CityBike Flow</h1>
-        <p className="lede">
-          Real Citi Bike rides from a public <span>`bikemap.nyc`</span> parquet
-          slice, animated locally with DuckDB WASM and deck.gl.
-        </p>
-
-        <div className="meta-row">
-          <div>
-            <span className="meta-label">Window</span>
-            <strong>
-              {formatSimulationDate(0)} · {formatSimulationTime(0)}-
-              {formatSimulationTime(totalSimulationSeconds)}
-            </strong>
-          </div>
-          <div>
-            <span className="meta-label">Loaded rides</span>
-            <strong>{visibleTrips.length}</strong>
-          </div>
-        </div>
-
-        <div className="chip-row">
-          {FILTER_OPTIONS.map((option) => (
-            <button
-              key={option}
-              className={option === rideFilter ? "chip active" : "chip"}
-              onClick={() => setRideFilter(option)}
-              type="button"
-            >
-              {rideFilterMeta[option].label}
-            </button>
-          ))}
-        </div>
-
-        <div className="filter-label">Borough</div>
-        <div className="chip-row secondary">
-          {BOROUGH_OPTIONS.map((option) => (
-            <button
-              key={option}
-              className={option === boroughFilter ? "chip active" : "chip"}
-              onClick={() => setBoroughFilter(option)}
-              type="button"
-            >
-              {boroughMeta[option].label}
-            </button>
-          ))}
-        </div>
-
-        <p className="description">
-          {rideFilterMeta[rideFilter].description} {boroughMeta[boroughFilter].description}
-        </p>
-
-        {(isLoading || loadError) && (
-          <p className="status-note">
-            {isLoading
-              ? "Loading the morning slice from the bikemap.nyc parquet CDN..."
-              : loadError}
-          </p>
-        )}
-
-        <div className="stats-grid">
-          <article className="stat-card">
-            <span>Active rides</span>
-            <strong>{activeTrips.length}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Stations live</span>
-            <strong>{activeStations}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Scene rides</span>
-            <strong>{renderedTrips.length}</strong>
-          </article>
-        </div>
-
-        <p className="status-inline">
-          {activeTrips.length
-            ? `Avg live trip ${formatMiles(averageDistance)}`
-            : "Waiting for the next ride pulse"}
-        </p>
-
-        <div className="preset-row">
-          {SCENE_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              className="preset"
-              disabled={isLoading || Boolean(loadError)}
-              onClick={() => {
-                setCurrentTime(preset.seconds);
-                setIsPlaying(false);
-              }}
-              type="button"
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel detail-panel">
-        {highlightedTrip ? (
-          <>
-            <div className="detail-header">
-              <span className="eyebrow">Real ride focus</span>
-              <span className="detail-pill">
-                {highlightedTrip.bikeType === "electric_bike" ? "E-BIKE" : "CLASSIC"}
-              </span>
-            </div>
-            <h2>{highlightedTrip.startStationName}</h2>
-            <p>to {highlightedTrip.endStationName}</p>
-
-            <dl className="detail-list">
-              <div>
-                <dt>Rider</dt>
-                <dd>{highlightedTrip.riderLabel}</dd>
-              </div>
-              <div>
-                <dt>Distance</dt>
-                <dd>{formatMiles(highlightedTrip.routeDistance)}</dd>
-              </div>
-              <div>
-                <dt>Boroughs</dt>
-                <dd>
-                  {formatTripBorough(highlightedTrip.startBorough)}
-                  {" -> "}
-                  {formatTripBorough(highlightedTrip.endBorough)}
-                </dd>
-              </div>
-              <div>
-                <dt>Departure</dt>
-                <dd>{formatSimulationTime(highlightedTrip.startTime)}</dd>
-              </div>
-              <div>
-                <dt>Duration</dt>
-                <dd>{formatDuration(highlightedTrip.durationMinute)}</dd>
-              </div>
-            </dl>
-
-            <div className="detail-footer">
-              Public bikemap.nyc parquet slice.
-            </div>
-          </>
-        ) : (
-          <div className="detail-empty">
-            {isLoading
-              ? "Loading real Citi Bike routes..."
-              : loadError
-                ? "The data slice failed to load."
-                : "No rides match the current filter."}
-          </div>
-        )}
-      </section>
-
-      <section className="panel controls-panel">
-        <div className="time-cluster">
-          <div className="time-readout">
-            <span>{formatSimulationDate(currentTime)}</span>
-            <strong>{formatSimulationTime(currentTime)}</strong>
+      <aside className="right-dock">
+        <section className="panel hero-panel">
+          <div className="eyebrow">Citi Bike morning playback</div>
+          <h1>CityBike Flow</h1>
+          <div className="summary-strip">
+            <span>{formatSimulationDate(0)}</span>
+            <span>
+              {formatSimulationTime(0)}-{formatSimulationTime(totalSimulationSeconds)}
+            </span>
+            <span>{visibleTrips.length} rides loaded</span>
           </div>
 
-          <input
-            aria-label="Timeline"
-            className="timeline"
-            disabled={isLoading || Boolean(loadError)}
-            max={totalSimulationSeconds}
-            min={0}
-            onChange={(event) => {
-              setCurrentTime(Number(event.target.value));
-              setIsPlaying(false);
-            }}
-            step={30}
-            type="range"
-            value={currentTime}
-          />
-        </div>
-
-        <div className="control-row">
-          <button
-            className="control-button primary"
-            disabled={isLoading || Boolean(loadError)}
-            onClick={() => {
-              if (currentTime >= totalSimulationSeconds - 1) {
-                setCurrentTime(0);
-              }
-              setIsPlaying((value) => !value);
-            }}
-            type="button"
-          >
-            {isPlaying ? "Pause" : "Play"}
-          </button>
-
-          <button
-            className="control-button"
-            disabled={isLoading || Boolean(loadError)}
-            onClick={() => {
-              setCurrentTime(0);
-              setIsPlaying(false);
-            }}
-            type="button"
-          >
-            Reset
-          </button>
-
-          <div className="speed-row">
-            {SPEED_OPTIONS.map((option) => (
+          <div className="filter-label">Ride type</div>
+          <div className="chip-row scroll-row">
+            {FILTER_OPTIONS.map((option) => (
               <button
-                key={option.label}
-                className={
-                  option.value === speed ? "speed-chip active" : "speed-chip"
-                }
-                disabled={isLoading || Boolean(loadError)}
-                onClick={() => setSpeed(option.value)}
+                key={option}
+                className={option === rideFilter ? "chip active" : "chip"}
+                onClick={() => setRideFilter(option)}
                 type="button"
               >
-                {option.label}
+                {rideFilterMeta[option].label}
               </button>
             ))}
           </div>
-        </div>
-      </section>
+
+          <div className="filter-label">Borough</div>
+          <div className="chip-row secondary scroll-row">
+            {BOROUGH_OPTIONS.map((option) => (
+              <button
+                key={option}
+                className={option === boroughFilter ? "chip active" : "chip"}
+                onClick={() => setBoroughFilter(option)}
+                type="button"
+              >
+                {boroughMeta[option].label}
+              </button>
+            ))}
+          </div>
+
+          {(isLoading || loadError) && (
+            <p className="status-note">
+              {isLoading ? "Loading the morning Citi Bike slice..." : loadError}
+            </p>
+          )}
+
+          <div className="stats-grid">
+            <article className="stat-card">
+              <span>Active rides</span>
+              <strong>{activeTrips.length}</strong>
+            </article>
+            <article className="stat-card">
+              <span>Stations live</span>
+              <strong>{activeStations}</strong>
+            </article>
+            <article className="stat-card">
+              <span>Scene rides</span>
+              <strong>{renderedTrips.length}</strong>
+            </article>
+          </div>
+        </section>
+        <section className="panel detail-panel">
+          {highlightedTrip ? (
+            <>
+              <div className="detail-header">
+                <span className="eyebrow">Active ride</span>
+                <span className="detail-pill">
+                  {highlightedTrip.bikeType === "electric_bike" ? "E-BIKE" : "CLASSIC"}
+                </span>
+              </div>
+              <h2>{highlightedTrip.startStationName}</h2>
+              <p className="detail-route">to {highlightedTrip.endStationName}</p>
+
+              <dl className="detail-list">
+                <div>
+                  <dt>Distance</dt>
+                  <dd>{formatMiles(highlightedTrip.routeDistance)}</dd>
+                </div>
+                <div>
+                  <dt>Duration</dt>
+                  <dd>{formatDuration(highlightedTrip.durationMinute)}</dd>
+                </div>
+                <div>
+                  <dt>Departure</dt>
+                  <dd>{formatSimulationTime(highlightedTrip.startTime)}</dd>
+                </div>
+                <div>
+                  <dt>Rider</dt>
+                  <dd>{highlightedTrip.riderLabel}</dd>
+                </div>
+              </dl>
+              <p className="detail-boroughs">
+                {formatTripBorough(highlightedTrip.startBorough)}
+                {" -> "}
+                {formatTripBorough(highlightedTrip.endBorough)}
+              </p>
+            </>
+          ) : (
+            <div className="detail-empty">
+              {isLoading
+                ? "Loading rides..."
+                : loadError
+                  ? "The data slice failed to load."
+                : "No rides match the current filter."}
+            </div>
+          )}
+          <div className="detail-controls">
+            <div className="time-cluster">
+              <div className="time-readout">
+                <span>{formatSimulationDate(currentTime)}</span>
+                <strong>{formatSimulationTime(currentTime)}</strong>
+              </div>
+
+              <input
+                aria-label="Timeline"
+                className="timeline"
+                disabled={isLoading || Boolean(loadError)}
+                max={totalSimulationSeconds}
+                min={0}
+                onChange={(event) => {
+                  setCurrentTime(Number(event.target.value));
+                  setIsPlaying(false);
+                }}
+                step={30}
+                type="range"
+                value={currentTime}
+              />
+            </div>
+
+            <div className="control-row">
+              <button
+                className="control-button primary"
+                disabled={isLoading || Boolean(loadError)}
+                onClick={() => {
+                  if (currentTime >= totalSimulationSeconds - 1) {
+                    setCurrentTime(0);
+                  }
+                  setIsPlaying((value) => !value);
+                }}
+                type="button"
+              >
+                {isPlaying ? "Pause" : "Play"}
+              </button>
+
+              <button
+                className="control-button"
+                disabled={isLoading || Boolean(loadError)}
+                onClick={() => {
+                  setCurrentTime(0);
+                  setIsPlaying(false);
+                }}
+                type="button"
+              >
+                Reset
+              </button>
+
+              <div className="speed-row compact">
+                {SPEED_OPTIONS.map((option) => (
+                  <button
+                    key={option.label}
+                    className={
+                      option.value === speed ? "speed-chip active" : "speed-chip"
+                    }
+                    disabled={isLoading || Boolean(loadError)}
+                    onClick={() => setSpeed(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }

@@ -120,8 +120,7 @@ export const rideFilterMeta: Record<
 > = {
   all: {
     label: "All rides",
-    description:
-      "Real Citi Bike trips from a Friday morning slice, processed and hosted by bikemap.nyc."
+    description: "Historical Citi Bike trips from a Friday morning slice."
   },
   classic_bike: {
     label: "Classic bikes",
