@@ -295,6 +295,7 @@ h2 {
 .detail-list dd {
   margin: 4px 0 0;
   font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .detail-route {
@@ -313,6 +314,21 @@ h2 {
   min-height: 92px;
   display: flex;
   align-items: center;
+}
+
+.detail-clear {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.detail-clear:hover {
+  color: var(--text);
 }
 
 .detail-controls {

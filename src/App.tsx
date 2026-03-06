@@ -209,12 +209,7 @@ function App() {
     hoveredTrip && visibleTrips.some((trip) => trip.id === hoveredTrip.id)
       ? hoveredTrip
       : null;
-  const highlightedTrip =
-    pinnedTrip ??
-    (hoveredVisibleTrip ??
-      activeTrips[0] ??
-      visibleTrips[0] ??
-      null);
+  const highlightedTrip = pinnedTrip ?? hoveredVisibleTrip ?? null;
   const hasExplicitFocus = Boolean(pinnedTrip || hoveredVisibleTrip);
   const renderedTrips =
     activeTrips.length > 32 ? activeTrips.slice(activeTrips.length - 32) : activeTrips;
@@ -464,42 +459,67 @@ function App() {
           </div>
         </section>
         <section className="panel detail-panel">
-          {highlightedTrip ? (
+          {pinnedTrip ? (
             <>
               <div className="detail-header">
-                <span className="eyebrow">
-                  {pinnedTrip ? "Pinned ride" : "Active ride"}
-                </span>
+                <span className="eyebrow">Pinned ride details</span>
                 <span className="detail-pill">
-                  {highlightedTrip.bikeType === "electric_bike" ? "E-BIKE" : "CLASSIC"}
+                  {pinnedTrip.bikeType === "electric_bike" ? "E-BIKE" : "CLASSIC"}
                 </span>
               </div>
-              <h2>{highlightedTrip.startStationName}</h2>
-              <p className="detail-route">to {highlightedTrip.endStationName}</p>
+              <h2>{pinnedTrip.startStationName}</h2>
+              <p className="detail-route">to {pinnedTrip.endStationName}</p>
 
               <dl className="detail-list">
                 <div>
-                  <dt>Distance</dt>
-                  <dd>{formatMiles(highlightedTrip.routeDistance)}</dd>
+                  <dt>Start station</dt>
+                  <dd>{pinnedTrip.startStationName}</dd>
                 </div>
                 <div>
-                  <dt>Duration</dt>
-                  <dd>{formatDuration(highlightedTrip.durationMinute)}</dd>
+                  <dt>End station</dt>
+                  <dd>{pinnedTrip.endStationName}</dd>
                 </div>
                 <div>
-                  <dt>Departure</dt>
-                  <dd>{formatSimulationTime(highlightedTrip.startTime)}</dd>
+                  <dt>Start time</dt>
+                  <dd>{formatSimulationTime(pinnedTrip.startTime)}</dd>
+                </div>
+                <div>
+                  <dt>End time</dt>
+                  <dd>{formatSimulationTime(pinnedTrip.endTime)}</dd>
+                </div>
+                <div>
+                  <dt>Bike type</dt>
+                  <dd>
+                    {pinnedTrip.bikeType === "electric_bike"
+                      ? "Electric bike"
+                      : "Classic bike"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Rider</dt>
-                  <dd>{highlightedTrip.riderLabel}</dd>
+                  <dd>{pinnedTrip.riderLabel}</dd>
+                </div>
+                <div>
+                  <dt>Distance</dt>
+                  <dd>{formatMiles(pinnedTrip.routeDistance)}</dd>
+                </div>
+                <div>
+                  <dt>Duration</dt>
+                  <dd>{formatDuration(pinnedTrip.durationMinute)}</dd>
                 </div>
               </dl>
               <p className="detail-boroughs">
-                {formatTripBorough(highlightedTrip.startBorough)}
+                {formatTripBorough(pinnedTrip.startBorough)}
                 {" -> "}
-                {formatTripBorough(highlightedTrip.endBorough)}
+                {formatTripBorough(pinnedTrip.endBorough)}
               </p>
+              <button
+                className="detail-clear"
+                onClick={() => setPinnedTripId(null)}
+                type="button"
+              >
+                Clear selection
+              </button>
             </>
           ) : (
             <div className="detail-empty">
@@ -507,7 +527,9 @@ function App() {
                 ? "Loading rides..."
                 : loadError
                   ? "The data slice failed to load."
-                : "No rides match the current filter."}
+                  : hoveredVisibleTrip
+                    ? "Click this ride to pin it and inspect full trip details."
+                    : "Click a moving ride to inspect its full trip details."}
             </div>
           )}
           <div className="detail-controls">
