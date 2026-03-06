@@ -20,9 +20,12 @@ import {
   formatMiles,
   formatSimulationDate,
   formatSimulationTime,
-  hexToRgb,
-  uniqueStationCount
+  hexToRgb
 } from "./lib/format";
+import {
+  derivePlaybackState,
+  getTripPosition
+} from "./lib/playback";
 
 const INITIAL_VIEW_STATE = {
   longitude: -73.955,
@@ -73,22 +76,6 @@ const SPEED_OPTIONS = [
 const FILTER_OPTIONS = Object.keys(rideFilterMeta) as RideFilter[];
 const BOROUGH_OPTIONS = Object.keys(boroughMeta) as BoroughFilter[];
 
-function matchesFilter(trip: Trip, rideFilter: RideFilter) {
-  return (
-    rideFilter === "all" ||
-    trip.bikeType === rideFilter ||
-    trip.memberCasual === rideFilter
-  );
-}
-
-function matchesBoroughFilter(trip: Trip, boroughFilter: BoroughFilter) {
-  return (
-    boroughFilter === "all" ||
-    trip.startBorough === boroughFilter ||
-    trip.endBorough === boroughFilter
-  );
-}
-
 function formatTripBorough(
   borough: Trip["startBorough"]
 ): string {
@@ -101,43 +88,6 @@ function formatTripBorough(
   }
 
   return boroughMeta[borough].label;
-}
-
-function getTripPosition(
-  trip: Trip,
-  currentTime: number
-): [number, number] | null {
-  if (currentTime < trip.startTime || currentTime > trip.endTime) {
-    return null;
-  }
-
-  const { timestamps, path } = trip;
-
-  if (timestamps.length < 2 || path.length < 2) {
-    return path[0] ?? null;
-  }
-
-  for (let index = 1; index < timestamps.length; index += 1) {
-    const previousTime = timestamps[index - 1];
-    const nextTime = timestamps[index];
-
-    if (currentTime <= nextTime) {
-      const [startLng, startLat] = path[index - 1]!;
-      const [endLng, endLat] = path[index]!;
-      const span = nextTime - previousTime || 1;
-      const progress = Math.min(
-        1,
-        Math.max(0, (currentTime - previousTime) / span)
-      );
-
-      return [
-        startLng + (endLng - startLng) * progress,
-        startLat + (endLat - startLat) * progress
-      ];
-    }
-  }
-
-  return path[path.length - 1] ?? null;
 }
 
 function App() {
@@ -193,39 +143,24 @@ function App() {
     };
   }, []);
 
-  const visibleTrips = trips.filter(
-    (trip) =>
-      matchesFilter(trip, rideFilter) &&
-      matchesBoroughFilter(trip, boroughFilter)
-  );
-  const activeTrips = visibleTrips.filter(
-    (trip) => currentTime >= trip.startTime && currentTime <= trip.endTime
-  );
-  const activeStations = uniqueStationCount(activeTrips);
-  const pinnedTrip = pinnedTripId
-    ? visibleTrips.find((trip) => trip.id === pinnedTripId) ?? null
-    : null;
-  const hoveredVisibleTrip =
-    hoveredTrip && visibleTrips.some((trip) => trip.id === hoveredTrip.id)
-      ? hoveredTrip
-      : null;
-  const highlightedTrip = pinnedTrip ?? hoveredVisibleTrip ?? null;
-  const hasExplicitFocus = Boolean(pinnedTrip || hoveredVisibleTrip);
-  const renderedTrips =
-    activeTrips.length > 32 ? activeTrips.slice(activeTrips.length - 32) : activeTrips;
-  const focusStations = highlightedTrip
-    ? [
-        {
-          name: highlightedTrip.startStationName,
-          coordinates: highlightedTrip.startCoordinates
-        },
-        {
-          name: highlightedTrip.endStationName,
-          coordinates: highlightedTrip.endCoordinates
-        }
-      ]
-    : [];
-  const labeledFocusStations = hasExplicitFocus ? focusStations : [];
+  const {
+    visibleTrips,
+    activeTrips,
+    activeStations,
+    pinnedTrip,
+    hoveredVisibleTrip,
+    highlightedTrip,
+    renderedTrips,
+    focusStations,
+    labeledFocusStations
+  } = derivePlaybackState({
+    trips,
+    rideFilter,
+    boroughFilter,
+    currentTime,
+    hoveredTrip,
+    pinnedTripId
+  });
 
   useEffect(() => {
     setViewState(BOROUGH_VIEW_STATE[boroughFilter]);
