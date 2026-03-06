@@ -14,10 +14,11 @@ Public prototype for exploring historical Citi Bike playback in New York.
 - React + TypeScript
 - deck.gl
 - MapLibre GL
-- DuckDB WASM
+- Static preprocessed trip slice
 
 ## Folder Map
 
+- `public/data/`: preprocessed official Citi Bike slice shipped with the app
 - `src/`: application code, trip data, styles
 - `docs/notes/`: lightweight project notes
 - `docs/reference-notes/`: reusable reference material required for active repos
@@ -33,13 +34,13 @@ The app runs without a backend or API key.
 
 ## Deploy
 
-GitHub Pages is configured to deploy from `main` via Actions.
+GitHub Pages is configured to deploy from `master` via Actions.
 
 - Target URL: `https://thisiswei.github.io/bikeflo`
 - Workflow: [deploy-pages.yml](/Users/w/Development/code/bikeflo/.github/workflows/deploy-pages.yml)
 
 ## Notes
 
-- The current slice uses real Citi Bike rides from `2025-07-18 06:00-10:30` America/New_York, loaded from the public `https://cdn.bikemap.nyc/parquets/2025-07-18.parquet`.
-- Route geometry comes from the public processed parquet, not device GPS traces.
-- The browser currently loads a balanced morning sample and animates only the active ride set for readability.
+- The current slice uses real Citi Bike rides from the official February 2026 trip history for `2026-02-27 06:00-10:30` America/New_York.
+- The browser loads a preprocessed local slice from `public/data/official-2026-02-27-morning.json`, so the deployed app does not fetch raw AWS trip ZIPs at runtime.
+- Route paths are inferred approximations from start and end stations, not device GPS traces.

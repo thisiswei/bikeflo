@@ -1,5 +1,3 @@
-import * as duckdb from "@duckdb/duckdb-wasm";
-import polyline from "@mapbox/polyline";
 import stationsMeta from "./stations.json";
 
 export type Station = {
@@ -48,43 +46,66 @@ export type Trip = {
   durationMinute: number;
 };
 
-type QueryRow = {
-  id: string;
-  startStationName: string;
-  endStationName: string;
-  startedAtMs: bigint | number;
-  endedAtMs: bigint | number;
-  bikeType: "classic_bike" | "electric_bike";
-  memberCasual: "member" | "casual";
-  startLat: number;
-  startLng: number;
-  endLat: number;
-  endLng: number;
-  routeGeometry: string;
-  routeDistance: number;
-};
-
 type StationMeta = {
   name: string;
   aliases?: string[];
   borough?: string;
 };
 
-const PARQUET_BASE_URL = "https://cdn.bikemap.nyc";
-const PARQUET_DAY = "2025-07-18";
-const FILE_NAME = `${PARQUET_DAY}.parquet`;
-const WINDOW_START = new Date("2025-07-18T06:00:00-04:00");
-const WINDOW_END = new Date("2025-07-18T10:30:00-04:00");
-const INITIAL_FOCUS_TIME = new Date("2025-07-18T07:30:00-04:00");
-const BOUNDS = {
-  minLat: 40.65,
-  maxLat: 40.84,
-  minLng: -74.01,
-  maxLng: -73.84
+type OfficialTripRow = {
+  id: string;
+  startStationName: string;
+  endStationName: string;
+  startedAt: string;
+  endedAt: string;
+  bikeType: "classic_bike" | "electric_bike";
+  memberCasual: "member" | "casual";
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+  routeDistance: number;
 };
-const MAX_TRIPS = 900;
-const SAMPLE_BUCKET_MINUTES = 15;
-const MAX_TRIPS_PER_BUCKET = 50;
+
+type OfficialSlicePayload = {
+  meta: {
+    source: string;
+    sourceUrl: string;
+    day: string;
+    windowStart: string;
+    windowEnd: string;
+    initialFocusTime: string;
+    count: number;
+    notes: string;
+  };
+  trips: OfficialTripRow[];
+};
+
+type Coordinate = [number, number];
+
+const OFFICIAL_SOURCE_URL =
+  "https://s3.amazonaws.com/tripdata/202602-citibike-tripdata.zip";
+const OFFICIAL_SLICE_PATH = `${import.meta.env.BASE_URL}data/official-2026-02-27-morning.json`;
+const WINDOW_START = new Date("2026-02-27T06:00:00-05:00");
+const WINDOW_END = new Date("2026-02-27T10:30:00-05:00");
+const INITIAL_FOCUS_TIME = new Date("2026-02-27T07:30:00-05:00");
+
+const CROSSING_POINTS: Record<string, Coordinate[]> = {
+  "brooklyn-manhattan": [
+    [-73.9969, 40.7061],
+    [-73.9903, 40.7075],
+    [-73.9718, 40.7137]
+  ],
+  "manhattan-queens": [[-73.9527, 40.7568]],
+  "bronx-manhattan": [
+    [-73.9337, 40.8151],
+    [-73.9288, 40.8107]
+  ],
+  "brooklyn-queens": [
+    [-73.9501, 40.7447],
+    [-73.9222, 40.7265]
+  ]
+};
 
 const boroughMeta: Record<
   BoroughFilter,
@@ -125,7 +146,7 @@ export const rideFilterMeta: Record<
 > = {
   all: {
     label: "All rides",
-    description: "Historical Citi Bike trips from a Friday morning slice."
+    description: "Historical Citi Bike trips from the official February 2026 trip history."
   },
   classic_bike: {
     label: "Classic bikes",
@@ -133,7 +154,7 @@ export const rideFilterMeta: Record<
   },
   electric_bike: {
     label: "E-bikes",
-    description: "Electric-assist trips from the same historical window."
+    description: "Electric-assist trips from the same official historical window."
   },
   member: {
     label: "Members",
@@ -141,17 +162,11 @@ export const rideFilterMeta: Record<
   },
   casual: {
     label: "Casual",
-    description: "Short-term rider trips from the same window."
+    description: "Short-term rider trips from the same official window."
   }
 };
 
-let dbPromise:
-  | Promise<{
-      db: duckdb.AsyncDuckDB;
-      conn: duckdb.AsyncDuckDBConnection;
-    }>
-  | null = null;
-let fileRegistered = false;
+let slicePromise: Promise<OfficialSlicePayload> | null = null;
 
 const BOROUGH_LOOKUP = new Map<string, BoroughKey>();
 
@@ -176,6 +191,85 @@ function buildTimestamps(startTime: number, endTime: number, count: number) {
     { length: count },
     (_, index) => startTime + ((endTime - startTime) * index) / (count - 1)
   );
+}
+
+function distanceSquared([ax, ay]: Coordinate, [bx, by]: Coordinate) {
+  return (ax - bx) ** 2 + (ay - by) ** 2;
+}
+
+function dedupePath(path: Coordinate[]) {
+  return path.filter(
+    (point, index) =>
+      index === 0 ||
+      point[0] !== path[index - 1]?.[0] ||
+      point[1] !== path[index - 1]?.[1]
+  );
+}
+
+function orthogonalPath(start: Coordinate, end: Coordinate) {
+  const midLat = start[1] + (end[1] - start[1]) * 0.55;
+
+  return dedupePath([
+    start,
+    [start[0], midLat],
+    [end[0], midLat],
+    end
+  ]);
+}
+
+function normalizedCrossingKey(
+  startBorough: BoroughKey,
+  endBorough: BoroughKey
+) {
+  const key = [startBorough, endBorough].sort().join("-");
+  return key in CROSSING_POINTS ? key : null;
+}
+
+function buildApproximatePath(
+  start: Coordinate,
+  end: Coordinate,
+  startBorough: BoroughKey,
+  endBorough: BoroughKey
+) {
+  if (
+    startBorough === endBorough ||
+    startBorough === "unknown" ||
+    endBorough === "unknown" ||
+    startBorough === "other" ||
+    endBorough === "other"
+  ) {
+    return orthogonalPath(start, end);
+  }
+
+  const crossingKey = normalizedCrossingKey(startBorough, endBorough);
+  if (!crossingKey) {
+    return orthogonalPath(start, end);
+  }
+
+  const connector = CROSSING_POINTS[crossingKey].reduce((best, candidate) => {
+    if (!best) {
+      return candidate;
+    }
+
+    const bestScore =
+      distanceSquared(start, best) + distanceSquared(best, end);
+    const candidateScore =
+      distanceSquared(start, candidate) + distanceSquared(candidate, end);
+
+    return candidateScore < bestScore ? candidate : best;
+  }, null as Coordinate | null);
+
+  if (!connector) {
+    return orthogonalPath(start, end);
+  }
+
+  return dedupePath([
+    start,
+    [connector[0], start[1]],
+    connector,
+    [connector[0], end[1]],
+    end
+  ]);
 }
 
 function normalizeBorough(value?: string): BoroughKey {
@@ -206,137 +300,43 @@ function pickAccent(
   return memberCasual === "casual" ? "#ff8a5b" : "#c19bf5";
 }
 
-async function getDatabase() {
-  if (!dbPromise) {
-    dbPromise = (async () => {
-      const bundles = duckdb.getJsDelivrBundles();
-      const bundle = await duckdb.selectBundle(bundles);
-      const workerUrl = URL.createObjectURL(
-        new Blob([`importScripts("${bundle.mainWorker}");`], {
-          type: "text/javascript"
-        })
-      );
+function parseOfficialEasternTime(value: string) {
+  return new Date(
+    /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}-05:00`
+  );
+}
 
-      const worker = new Worker(workerUrl);
-      const logger: duckdb.Logger = { log: () => {} };
-      const db = new duckdb.AsyncDuckDB(logger, worker);
+async function getOfficialSlice() {
+  if (!slicePromise) {
+    slicePromise = fetch(OFFICIAL_SLICE_PATH).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load official Citi Bike slice from ${OFFICIAL_SOURCE_URL}.`
+        );
+      }
 
-      await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-      URL.revokeObjectURL(workerUrl);
-
-      await db.open({
-        path: ":memory:",
-        filesystem: {
-          forceFullHTTPReads: false,
-          allowFullHTTPReads: false,
-          reliableHeadRequests: true
-        }
-      });
-
-      const conn = await db.connect();
-      return { db, conn };
-    })();
+      return (await response.json()) as OfficialSlicePayload;
+    });
   }
 
-  const database = await dbPromise;
-
-  if (!fileRegistered) {
-    await database.db.registerFileURL(
-      FILE_NAME,
-      `${PARQUET_BASE_URL}/parquets/${FILE_NAME}`,
-      duckdb.DuckDBDataProtocol.HTTP,
-      false
-    );
-    fileRegistered = true;
-  }
-
-  return database;
+  return slicePromise;
 }
 
 export async function loadCitybikeSlice(): Promise<{
   trips: Trip[];
   stations: Station[];
 }> {
-  const { conn } = await getDatabase();
-
-  const result = await conn.query(`
-    WITH candidates AS (
-      SELECT
-        id,
-        startStationName,
-        endStationName,
-        epoch_ms(startedAt) AS startedAtMs,
-        epoch_ms(endedAt) AS endedAtMs,
-        bikeType,
-        memberCasual,
-        startLat,
-        startLng,
-        endLat,
-        endLng,
-        routeGeometry,
-        routeDistance,
-        floor(
-          (epoch_ms(startedAt) - ${WINDOW_START.getTime()}) /
-          (${SAMPLE_BUCKET_MINUTES} * 60 * 1000)
-        ) AS timeBucket
-      FROM read_parquet(['${FILE_NAME}'])
-      WHERE startedAt >= epoch_ms(${WINDOW_START.getTime()})
-        AND startedAt < epoch_ms(${WINDOW_END.getTime()})
-        AND routeGeometry IS NOT NULL
-        AND routeDistance IS NOT NULL
-        AND epoch_ms(endedAt) - epoch_ms(startedAt) BETWEEN 2 * 60 * 1000 AND 90 * 60 * 1000
-        AND startLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
-        AND endLat BETWEEN ${BOUNDS.minLat} AND ${BOUNDS.maxLat}
-        AND startLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
-        AND endLng BETWEEN ${BOUNDS.minLng} AND ${BOUNDS.maxLng}
-        AND routeDistance BETWEEN 250 AND 12000
-    ),
-    sampled AS (
-      SELECT
-        *,
-        row_number() OVER (
-          PARTITION BY timeBucket
-          ORDER BY hash(id)
-        ) AS bucketRank
-      FROM candidates
-    )
-    SELECT
-      id,
-      startStationName,
-      endStationName,
-      startedAtMs,
-      endedAtMs,
-      bikeType,
-      memberCasual,
-      startLat,
-      startLng,
-      endLat,
-      endLng,
-      routeGeometry,
-      routeDistance
-    FROM sampled
-    WHERE bucketRank <= ${MAX_TRIPS_PER_BUCKET}
-    ORDER BY startedAtMs ASC
-    LIMIT ${MAX_TRIPS}
-  `);
-
+  const payload = await getOfficialSlice();
   const stationMap = new Map<string, Station>();
 
-  const trips = (result.toArray() as QueryRow[])
+  const trips = payload.trips
     .map((row) => {
-      const startedAt = new Date(Number(row.startedAtMs));
-      const endedAt = new Date(Number(row.endedAtMs));
-      const decoded = polyline.decode(row.routeGeometry, 6);
-      const path = decoded.map(
-        ([latitude, longitude]) => [longitude, latitude] as [number, number]
-      );
-
-      if (path.length < 2) {
-        return null;
-      }
-
+      const startedAt = parseOfficialEasternTime(row.startedAt);
+      const endedAt = parseOfficialEasternTime(row.endedAt);
       const startTime = (startedAt.getTime() - WINDOW_START.getTime()) / 1000;
       const endTime = (endedAt.getTime() - WINDOW_START.getTime()) / 1000;
+      const startBorough = BOROUGH_LOOKUP.get(row.startStationName) ?? "unknown";
+      const endBorough = BOROUGH_LOOKUP.get(row.endStationName) ?? "unknown";
 
       if (endTime <= 0 || startTime >= totalSimulationSeconds) {
         return null;
@@ -373,13 +373,19 @@ export async function loadCitybikeSlice(): Promise<{
         1,
         Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)
       );
+      const path = buildApproximatePath(
+        [row.startLng, row.startLat],
+        [row.endLng, row.endLat],
+        startBorough,
+        endBorough
+      );
 
       return {
         id: row.id,
         startStationName: row.startStationName,
         endStationName: row.endStationName,
-        startBorough: BOROUGH_LOOKUP.get(row.startStationName) ?? "unknown",
-        endBorough: BOROUGH_LOOKUP.get(row.endStationName) ?? "unknown",
+        startBorough,
+        endBorough,
         startCoordinates: [row.startLng, row.startLat],
         endCoordinates: [row.endLng, row.endLat],
         startedAt,

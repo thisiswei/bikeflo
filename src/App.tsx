@@ -25,9 +25,9 @@ import {
 } from "./lib/format";
 
 const INITIAL_VIEW_STATE = {
-  longitude: -73.968,
-  latitude: 40.726,
-  zoom: 11.15,
+  longitude: -73.955,
+  latitude: 40.728,
+  zoom: 11.6,
   pitch: 14,
   bearing: -6
 };
@@ -410,7 +410,7 @@ function App() {
           </div>
 
           <div className="filter-label">Ride type</div>
-          <div className="chip-row scroll-row">
+          <div className="chip-row">
             {FILTER_OPTIONS.map((option) => (
               <button
                 key={option}
@@ -424,7 +424,7 @@ function App() {
           </div>
 
           <div className="filter-label">Borough</div>
-          <div className="chip-row secondary scroll-row">
+          <div className="chip-row secondary">
             {BOROUGH_OPTIONS.map((option) => (
               <button
                 key={option}
