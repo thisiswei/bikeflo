@@ -27,6 +27,7 @@ Public prototype for exploring historical Citi Bike playback in New York.
 
 ```bash
 npm install
+npm run data:route
 npm run dev
 ```
 
@@ -42,5 +43,6 @@ GitHub Pages is configured to deploy from `master` via Actions.
 ## Notes
 
 - The current slice uses real Citi Bike rides from the official February 2026 trip history for `2026-02-27 06:00-10:30` America/New_York.
-- The browser loads a preprocessed local slice from `public/data/official-2026-02-27-morning.json`, so the deployed app does not fetch raw AWS trip ZIPs at runtime.
-- Route paths are inferred approximations from start and end stations, not device GPS traces.
+- The browser loads a preprocessed local slice from `public/data/official-2026-02-27-morning-routed.json`, so the deployed app does not fetch raw AWS trip ZIPs at runtime.
+- `npm run data:route` rebuilds the routed slice from the checked-in official trip slice.
+- Route paths are still inferred from station endpoints, but they are now generated offline and cached into the shipped data asset instead of being recomputed in the browser.

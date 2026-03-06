@@ -65,6 +65,9 @@ type OfficialTripRow = {
   endLat: number;
   endLng: number;
   routeDistance: number;
+  startBorough?: BoroughKey;
+  endBorough?: BoroughKey;
+  path?: Coordinate[];
 };
 
 type OfficialSlicePayload = {
@@ -77,6 +80,8 @@ type OfficialSlicePayload = {
     initialFocusTime: string;
     count: number;
     notes: string;
+    generatedAt?: string;
+    routeStrategy?: string;
   };
   trips: OfficialTripRow[];
 };
@@ -85,27 +90,10 @@ type Coordinate = [number, number];
 
 const OFFICIAL_SOURCE_URL =
   "https://s3.amazonaws.com/tripdata/202602-citibike-tripdata.zip";
-const OFFICIAL_SLICE_PATH = `${import.meta.env.BASE_URL}data/official-2026-02-27-morning.json`;
+const OFFICIAL_SLICE_PATH = `${import.meta.env.BASE_URL}data/official-2026-02-27-morning-routed.json`;
 const WINDOW_START = new Date("2026-02-27T06:00:00-05:00");
 const WINDOW_END = new Date("2026-02-27T10:30:00-05:00");
 const INITIAL_FOCUS_TIME = new Date("2026-02-27T07:30:00-05:00");
-
-const CROSSING_POINTS: Record<string, Coordinate[]> = {
-  "brooklyn-manhattan": [
-    [-73.9969, 40.7061],
-    [-73.9903, 40.7075],
-    [-73.9718, 40.7137]
-  ],
-  "manhattan-queens": [[-73.9527, 40.7568]],
-  "bronx-manhattan": [
-    [-73.9337, 40.8151],
-    [-73.9288, 40.8107]
-  ],
-  "brooklyn-queens": [
-    [-73.9501, 40.7447],
-    [-73.9222, 40.7265]
-  ]
-};
 
 const boroughMeta: Record<
   BoroughFilter,
@@ -193,85 +181,6 @@ function buildTimestamps(startTime: number, endTime: number, count: number) {
   );
 }
 
-function distanceSquared([ax, ay]: Coordinate, [bx, by]: Coordinate) {
-  return (ax - bx) ** 2 + (ay - by) ** 2;
-}
-
-function dedupePath(path: Coordinate[]) {
-  return path.filter(
-    (point, index) =>
-      index === 0 ||
-      point[0] !== path[index - 1]?.[0] ||
-      point[1] !== path[index - 1]?.[1]
-  );
-}
-
-function orthogonalPath(start: Coordinate, end: Coordinate) {
-  const midLat = start[1] + (end[1] - start[1]) * 0.55;
-
-  return dedupePath([
-    start,
-    [start[0], midLat],
-    [end[0], midLat],
-    end
-  ]);
-}
-
-function normalizedCrossingKey(
-  startBorough: BoroughKey,
-  endBorough: BoroughKey
-) {
-  const key = [startBorough, endBorough].sort().join("-");
-  return key in CROSSING_POINTS ? key : null;
-}
-
-function buildApproximatePath(
-  start: Coordinate,
-  end: Coordinate,
-  startBorough: BoroughKey,
-  endBorough: BoroughKey
-) {
-  if (
-    startBorough === endBorough ||
-    startBorough === "unknown" ||
-    endBorough === "unknown" ||
-    startBorough === "other" ||
-    endBorough === "other"
-  ) {
-    return orthogonalPath(start, end);
-  }
-
-  const crossingKey = normalizedCrossingKey(startBorough, endBorough);
-  if (!crossingKey) {
-    return orthogonalPath(start, end);
-  }
-
-  const connector = CROSSING_POINTS[crossingKey].reduce((best, candidate) => {
-    if (!best) {
-      return candidate;
-    }
-
-    const bestScore =
-      distanceSquared(start, best) + distanceSquared(best, end);
-    const candidateScore =
-      distanceSquared(start, candidate) + distanceSquared(candidate, end);
-
-    return candidateScore < bestScore ? candidate : best;
-  }, null as Coordinate | null);
-
-  if (!connector) {
-    return orthogonalPath(start, end);
-  }
-
-  return dedupePath([
-    start,
-    [connector[0], start[1]],
-    connector,
-    [connector[0], end[1]],
-    end
-  ]);
-}
-
 function normalizeBorough(value?: string): BoroughKey {
   switch (value) {
     case "Manhattan":
@@ -335,8 +244,12 @@ export async function loadCitybikeSlice(): Promise<{
       const endedAt = parseOfficialEasternTime(row.endedAt);
       const startTime = (startedAt.getTime() - WINDOW_START.getTime()) / 1000;
       const endTime = (endedAt.getTime() - WINDOW_START.getTime()) / 1000;
-      const startBorough = BOROUGH_LOOKUP.get(row.startStationName) ?? "unknown";
-      const endBorough = BOROUGH_LOOKUP.get(row.endStationName) ?? "unknown";
+      const startBorough =
+        row.startBorough ??
+        (BOROUGH_LOOKUP.get(row.startStationName) ?? "unknown");
+      const endBorough =
+        row.endBorough ??
+        (BOROUGH_LOOKUP.get(row.endStationName) ?? "unknown");
 
       if (endTime <= 0 || startTime >= totalSimulationSeconds) {
         return null;
@@ -373,12 +286,13 @@ export async function loadCitybikeSlice(): Promise<{
         1,
         Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)
       );
-      const path = buildApproximatePath(
-        [row.startLng, row.startLat],
-        [row.endLng, row.endLat],
-        startBorough,
-        endBorough
-      );
+      const path =
+        row.path && row.path.length > 1
+          ? row.path
+          : ([
+              [row.startLng, row.startLat],
+              [row.endLng, row.endLat]
+            ] satisfies Coordinate[]);
 
       return {
         id: row.id,

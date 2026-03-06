@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "data:route": "node scripts/build-routed-slice.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.11",
