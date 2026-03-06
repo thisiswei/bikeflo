@@ -1,5 +1,6 @@
 import * as duckdb from "@duckdb/duckdb-wasm";
 import polyline from "@mapbox/polyline";
+import stationsMeta from "./stations.json";
 
 export type Station = {
   id: string;
@@ -16,10 +17,21 @@ export type RideFilter =
   | "member"
   | "casual";
 
+export type BoroughFilter =
+  | "all"
+  | "manhattan"
+  | "brooklyn"
+  | "queens"
+  | "bronx";
+
+type BoroughKey = Exclude<BoroughFilter, "all"> | "other" | "unknown";
+
 export type Trip = {
   id: string;
   startStationName: string;
   endStationName: string;
+  startBorough: BoroughKey;
+  endBorough: BoroughKey;
   startCoordinates: [number, number];
   endCoordinates: [number, number];
   startedAt: Date;
@@ -52,22 +64,55 @@ type QueryRow = {
   routeDistance: number;
 };
 
+type StationMeta = {
+  name: string;
+  aliases?: string[];
+  borough?: string;
+};
+
 const PARQUET_BASE_URL = "https://cdn.bikemap.nyc";
 const PARQUET_DAY = "2025-07-18";
 const FILE_NAME = `${PARQUET_DAY}.parquet`;
 const WINDOW_START = new Date("2025-07-18T07:00:00-04:00");
 const WINDOW_END = new Date("2025-07-18T08:35:00-04:00");
 const BOUNDS = {
-  minLat: 40.71,
-  maxLat: 40.77,
+  minLat: 40.65,
+  maxLat: 40.84,
   minLng: -74.01,
-  maxLng: -73.95
+  maxLng: -73.84
 };
-const MAX_TRIPS = 120;
+const MAX_TRIPS = 220;
+
+const boroughMeta: Record<
+  BoroughFilter,
+  { label: string; description: string }
+> = {
+  all: {
+    label: "All boroughs",
+    description: "Trips touching any borough in the loaded city slice."
+  },
+  manhattan: {
+    label: "Manhattan",
+    description: "Trips starting or ending in Manhattan."
+  },
+  brooklyn: {
+    label: "Brooklyn",
+    description: "Trips starting or ending in Brooklyn."
+  },
+  queens: {
+    label: "Queens",
+    description: "Trips starting or ending in Queens."
+  },
+  bronx: {
+    label: "Bronx",
+    description: "Trips starting or ending in the Bronx."
+  }
+};
 
 export const simulationStart = WINDOW_START;
 export const totalSimulationSeconds =
   (WINDOW_END.getTime() - WINDOW_START.getTime()) / 1000;
+export { boroughMeta };
 
 export const rideFilterMeta: Record<
   RideFilter,
@@ -104,6 +149,17 @@ let dbPromise:
   | null = null;
 let fileRegistered = false;
 
+const BOROUGH_LOOKUP = new Map<string, BoroughKey>();
+
+for (const station of stationsMeta as StationMeta[]) {
+  const borough = normalizeBorough(station.borough);
+
+  BOROUGH_LOOKUP.set(station.name, borough);
+  for (const alias of station.aliases ?? []) {
+    BOROUGH_LOOKUP.set(alias, borough);
+  }
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -116,6 +172,23 @@ function buildTimestamps(startTime: number, endTime: number, count: number) {
     { length: count },
     (_, index) => startTime + ((endTime - startTime) * index) / (count - 1)
   );
+}
+
+function normalizeBorough(value?: string): BoroughKey {
+  switch (value) {
+    case "Manhattan":
+      return "manhattan";
+    case "Brooklyn":
+      return "brooklyn";
+    case "Queens":
+      return "queens";
+    case "Bronx":
+      return "bronx";
+    case "New Jersey":
+      return "other";
+    default:
+      return "unknown";
+  }
 }
 
 function pickAccent(
@@ -270,6 +343,8 @@ export async function loadCitybikeSlice(): Promise<{
         id: row.id,
         startStationName: row.startStationName,
         endStationName: row.endStationName,
+        startBorough: BOROUGH_LOOKUP.get(row.startStationName) ?? "unknown",
+        endBorough: BOROUGH_LOOKUP.get(row.endStationName) ?? "unknown",
         startCoordinates: [row.startLng, row.startLat],
         endCoordinates: [row.endLng, row.endLat],
         startedAt,
