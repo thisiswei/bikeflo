@@ -147,6 +147,7 @@ function App() {
   const [rideFilter, setRideFilter] = useState<RideFilter>("all");
   const [boroughFilter, setBoroughFilter] = useState<BoroughFilter>("all");
   const [hoveredTrip, setHoveredTrip] = useState<Trip | null>(null);
+  const [pinnedTripId, setPinnedTripId] = useState<string | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -201,10 +202,20 @@ function App() {
     (trip) => currentTime >= trip.startTime && currentTime <= trip.endTime
   );
   const activeStations = uniqueStationCount(activeTrips);
-  const highlightedTrip =
+  const pinnedTrip = pinnedTripId
+    ? visibleTrips.find((trip) => trip.id === pinnedTripId) ?? null
+    : null;
+  const hoveredVisibleTrip =
     hoveredTrip && visibleTrips.some((trip) => trip.id === hoveredTrip.id)
       ? hoveredTrip
-      : activeTrips[0] ?? visibleTrips[0] ?? null;
+      : null;
+  const highlightedTrip =
+    pinnedTrip ??
+    (hoveredVisibleTrip ??
+      activeTrips[0] ??
+      visibleTrips[0] ??
+      null);
+  const hasExplicitFocus = Boolean(pinnedTrip || hoveredVisibleTrip);
   const renderedTrips =
     activeTrips.length > 32 ? activeTrips.slice(activeTrips.length - 32) : activeTrips;
   const focusStations = highlightedTrip
@@ -219,6 +230,7 @@ function App() {
         }
       ]
     : [];
+  const labeledFocusStations = hasExplicitFocus ? focusStations : [];
 
   useEffect(() => {
     setViewState(BOROUGH_VIEW_STATE[boroughFilter]);
@@ -266,14 +278,23 @@ function App() {
     }
   }, [hoveredTrip, visibleTrips]);
 
+  useEffect(() => {
+    if (
+      pinnedTripId &&
+      !visibleTrips.some((trip) => trip.id === pinnedTripId)
+    ) {
+      setPinnedTripId(null);
+    }
+  }, [pinnedTripId, visibleTrips]);
+
   const layers = [
     new PathLayer<Trip>({
       id: "focus-route",
       data: highlightedTrip ? [highlightedTrip] : [],
       getPath: (trip) => trip.path,
-      getColor: [28, 43, 68, 150],
-      getWidth: 5,
-      widthMinPixels: 1,
+      getColor: [28, 43, 68, 110],
+      getWidth: 3.5,
+      widthMinPixels: 0.75,
       rounded: true
     }),
     new TripsLayer<Trip>({
@@ -293,6 +314,9 @@ function App() {
       pickable: true,
       onHover: ({ object }: PickingInfo<Trip>) => {
         setHoveredTrip(object ?? null);
+      },
+      onClick: ({ object }: PickingInfo<Trip>) => {
+        setPinnedTripId(object?.id ?? null);
       }
     }),
     new ScatterplotLayer<Trip>({
@@ -311,6 +335,9 @@ function App() {
       pickable: true,
       onHover: ({ object }: PickingInfo<Trip>) => {
         setHoveredTrip(object ?? null);
+      },
+      onClick: ({ object }: PickingInfo<Trip>) => {
+        setPinnedTripId(object?.id ?? null);
       }
     }),
     new ScatterplotLayer({
@@ -318,24 +345,24 @@ function App() {
       data: focusStations,
       getPosition: (station) => station.coordinates,
       radiusUnits: "meters",
-      getRadius: 95,
-      getFillColor: [255, 209, 102, 220],
-      getLineColor: [28, 43, 68, 220],
-      lineWidthMinPixels: 2,
+      getRadius: 54,
+      getFillColor: [255, 209, 102, 92],
+      getLineColor: [28, 43, 68, 168],
+      lineWidthMinPixels: 1.25,
       stroked: true
     }),
     new TextLayer({
       id: "focus-station-labels",
-      data: focusStations,
+      data: labeledFocusStations,
       getPosition: (station) => station.coordinates,
       getText: (station) => station.name,
-      getColor: [20, 28, 38, 220],
-      getSize: 14,
+      getColor: [44, 56, 70, 182],
+      getSize: 12,
       sizeUnits: "pixels",
       fontFamily: "Space Grotesk, sans-serif",
       getTextAnchor: "start",
       getAlignmentBaseline: "bottom",
-      getPixelOffset: [12, -10]
+      getPixelOffset: [10, -8]
     })
   ];
 
@@ -345,6 +372,11 @@ function App() {
       <DeckGL
         controller
         layers={layers}
+        onClick={(event) => {
+          if (!event.object) {
+            setPinnedTripId(null);
+          }
+        }}
         onViewStateChange={(event) =>
           setViewState(event.viewState as typeof INITIAL_VIEW_STATE)
         }
@@ -424,7 +456,9 @@ function App() {
           {highlightedTrip ? (
             <>
               <div className="detail-header">
-                <span className="eyebrow">Active ride</span>
+                <span className="eyebrow">
+                  {pinnedTrip ? "Pinned ride" : "Active ride"}
+                </span>
                 <span className="detail-pill">
                   {highlightedTrip.bikeType === "electric_bike" ? "E-BIKE" : "CLASSIC"}
                 </span>
