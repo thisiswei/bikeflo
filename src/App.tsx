@@ -400,7 +400,7 @@ function App() {
       <aside className="right-dock">
         <section className="panel hero-panel">
           <div className="eyebrow">Citi Bike morning playback</div>
-          <h1>CityBike Flow</h1>
+          <h1>bikeflo</h1>
           <div className="summary-strip">
             <span>{formatSimulationDate(0)}</span>
             <span>
