@@ -287,6 +287,14 @@ function App() {
     }
   }, [pinnedTripId, visibleTrips]);
 
+  const handleTripHover = ({ object }: PickingInfo<Trip>) => {
+    setHoveredTrip(object ?? null);
+  };
+
+  const handleTripPin = ({ object }: PickingInfo<Trip>) => {
+    setPinnedTripId(object?.id ?? null);
+  };
+
   const layers = [
     new PathLayer<Trip>({
       id: "focus-route",
@@ -312,12 +320,20 @@ function App() {
       capRounded: true,
       jointRounded: true,
       pickable: true,
-      onHover: ({ object }: PickingInfo<Trip>) => {
-        setHoveredTrip(object ?? null);
-      },
-      onClick: ({ object }: PickingInfo<Trip>) => {
-        setPinnedTripId(object?.id ?? null);
-      }
+      onHover: handleTripHover,
+      onClick: handleTripPin
+    }),
+    new ScatterplotLayer<Trip>({
+      id: "hover-targets",
+      data: renderedTrips,
+      getPosition: (trip) => getTripPosition(trip, currentTime) ?? trip.path[0]!,
+      radiusUnits: "pixels",
+      getRadius: 14,
+      getFillColor: [0, 0, 0, 0],
+      stroked: false,
+      pickable: true,
+      onHover: handleTripHover,
+      onClick: handleTripPin
     }),
     new ScatterplotLayer<Trip>({
       id: "bike-heads",
@@ -332,13 +348,7 @@ function App() {
       getLineColor: [255, 255, 255, 210],
       lineWidthMinPixels: 1.5,
       stroked: true,
-      pickable: true,
-      onHover: ({ object }: PickingInfo<Trip>) => {
-        setHoveredTrip(object ?? null);
-      },
-      onClick: ({ object }: PickingInfo<Trip>) => {
-        setPinnedTripId(object?.id ?? null);
-      }
+      pickable: false
     }),
     new ScatterplotLayer({
       id: "focus-stations",
@@ -372,6 +382,7 @@ function App() {
       <DeckGL
         controller
         layers={layers}
+        pickingRadius={8}
         onClick={(event) => {
           if (!event.object) {
             setPinnedTripId(null);
