@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "data:route": "node scripts/build-routed-slice.mjs"
+    "data:route": "node scripts/build-routed-slice.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.11",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
   }
 }
